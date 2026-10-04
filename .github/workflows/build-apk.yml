@@ -1,4 +1,4 @@
-name: Build EXAM OS APK
+name: Build EXAM OS
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build EXAM OS
+    name: Build EXAM OS APK
     runs-on: ubuntu-latest
 
     steps:
@@ -26,7 +26,9 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
 
       - name: Set up Gradle 9.1.0
         uses: gradle/actions/setup-gradle@v4
@@ -37,6 +39,7 @@ jobs:
         run: |
           java -version
           gradle --version
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
       - name: Build APK
         run: |
