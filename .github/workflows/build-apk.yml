@@ -34,23 +34,49 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.1.0'
-          cache-read-only: false
 
-      - name: Locate Android project
+      - name: Extract EXAM OS project
         shell: bash
         run: |
-          PROJECT_DIR="$(find . -type f -name 'settings.gradle' -print -quit)"
+          set -e
 
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: settings.gradle was not found."
-            echo "Repository contents:"
-            find . -maxdepth 4 -type f | sort
+          ZIP_FILE="EXAM_OS_GITHUB_READY.zip"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: $ZIP_FILE not found."
+            ls -la
             exit 1
           fi
 
-          PROJECT_DIR="$(dirname "$PROJECT_DIR")"
+          rm -rf _exam_os_build
+          mkdir -p _exam_os_build
 
-          echo "Android project found at: $PROJECT_DIR"
+          unzip -q "$ZIP_FILE" -d _exam_os_build
+
+          echo "=== Extracted project ==="
+          find _exam_os_build -maxdepth 4 -type f | sort
+
+      - name: Locate Gradle project
+        shell: bash
+        run: |
+          set -e
+
+          SETTINGS_FILE="$(find _exam_os_build -type f \( \
+            -name 'settings.gradle' -o \
+            -name 'settings.gradle.kts' \
+          \) -print -quit)"
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "ERROR: No Gradle settings file found."
+            find _exam_os_build -type f | sort
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$SETTINGS_FILE")"
+
+          echo "Gradle project found:"
+          echo "$PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Verify toolchain
@@ -64,27 +90,42 @@ jobs:
       - name: Build APK
         shell: bash
         run: |
+          set -e
           cd "$PROJECT_DIR"
+
+          echo "Building from:"
+          pwd
+
+          echo "Project files:"
+          ls -la
+
           gradle --no-daemon --stacktrace --warning-mode all assembleDebug
 
-      - name: Verify APK
+      - name: Find APK
         shell: bash
         run: |
-          APK_PATH="$(find "$PROJECT_DIR/app/build/outputs/apk/debug" \
-            -type f -name '*.apk' -print -quit)"
+          set -e
 
-          if [ -z "$APK_PATH" ]; then
+          APK_FILE="$(find "$PROJECT_DIR" \
+            -type f \
+            -path '*/build/outputs/apk/debug/*.apk' \
+            -print -quit)"
+
+          if [ -z "$APK_FILE" ]; then
             echo "ERROR: APK was not generated."
+            find "$PROJECT_DIR" -type f | sort
             exit 1
           fi
 
-          echo "APK generated successfully:"
-          ls -lh "$APK_PATH"
+          echo "APK successfully generated:"
+          ls -lh "$APK_FILE"
+
+          echo "APK_FILE=$APK_FILE" >> "$GITHUB_ENV"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: EXAM_OS_APK
-          path: '**/app/build/outputs/apk/debug/*.apk'
+          path: ${{ env.APK_FILE }}
           if-no-files-found: error
           retention-days: 30
